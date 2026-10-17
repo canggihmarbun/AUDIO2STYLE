@@ -55,6 +55,13 @@ export function generateYamahaStyleFile(project: ProjectData): Uint8Array {
     text: project.title || 'Audio2Style'
   });
 
+  // XG System On SysEx at tick 0 (Wakes up Yamaha PSR-S750 sound module and initializes XG voice banks)
+  events.push({
+    tick: 0,
+    type: 'sysEx',
+    data: [0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7]
+  });
+
   // 4. Critical Yamaha SFF1 Marker Tags at tick 0 (mandatory for PSR-S750)
   events.push({
     tick: 0,

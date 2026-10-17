@@ -4,7 +4,7 @@
 
 export interface RawMidiEvent {
   tick: number; // absolute tick
-  type: 'noteOn' | 'noteOff' | 'marker' | 'trackName' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange' | 'pitchBend';
+  type: 'noteOn' | 'noteOff' | 'marker' | 'trackName' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange' | 'pitchBend' | 'sysEx';
   channel?: number; // 0-15 (0-indexed)
   pitch?: number;
   velocity?: number;
@@ -14,6 +14,7 @@ export interface RawMidiEvent {
   denominator?: number;
   controller?: number;
   value?: number;
+  data?: number[];
 }
 
 export function writeVLQ(value: number): number[] {
@@ -49,6 +50,7 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
     if (a.tick !== b.tick) return a.tick - b.tick;
     // Put meta events before note events at same tick with strict Yamaha SFF1 ordering
     const priority = (ev: RawMidiEvent) => {
+      if (ev.type === 'sysEx') return -1;
       if (ev.type === 'timeSig') return 0;
       if (ev.type === 'tempo') return 1;
       if (ev.type === 'trackName') return 2;
@@ -129,6 +131,13 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
       case 'noteOff': {
         const ch = (ev.channel || 0) & 0x0F;
         trackData.push(0x80 | ch, (ev.pitch || 60) & 0x7F, 0x00);
+        break;
+      }
+      case 'sysEx': {
+        const dataBytes = ev.data || [];
+        trackData.push(0xF0);
+        trackData.push(...writeVLQ(dataBytes.length));
+        trackData.push(...dataBytes);
         break;
       }
     }
