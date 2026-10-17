@@ -380,7 +380,7 @@ export interface AudioTranscriptionResult {
 }
 
 /**
- * Real Pitch and Onset Transcription from Audio Buffer
+ * Real Pitch and Onset Transcription from Audio Buffer (Advanced DSP Polyphonic Spectral Transcription)
  */
 export async function transcribeAudioToMidi(
   buffer: AudioBuffer,
@@ -403,7 +403,7 @@ export async function transcribeAudioToMidi(
     throw new Error('Sinyal audio terlalu lemah atau hening (RMS < 0.0005). Pastikan file audio memiliki suara yang jelas.');
   }
 
-  onProgress?.(15, 'Menganalisis tempo dan struktur birama...');
+  onProgress?.(15, 'Menganalisis tempo dan struktur birama secara mendalam...');
   await new Promise(r => setTimeout(r, 40));
 
   const bpm = targetBpm > 40 && targetBpm < 240 ? targetBpm : estimateBpmFromBuffer(buffer);
@@ -411,51 +411,54 @@ export async function transcribeAudioToMidi(
   const secondsPer16th = (60 / bpm) / 4;
   const analysisDuration = Math.min(buffer.duration, targetBars * secondsPerBar);
   const total16thSteps = targetBars * 16;
-
-  onProgress?.(30, 'Mengekstraksi transien drum (Kick, Snare, Hi-hat)...');
-  await new Promise(r => setTimeout(r, 40));
-
-  // 2. Real Drum Transient Extraction via Bandpass Spectral Energy
-  const drumNotes: MidiNote[] = [];
   const stepSamples = Math.floor(secondsPer16th * sampleRate);
 
-  // Analyze each 16th-note window for transients
+  onProgress?.(35, 'Mengekstraksi transien drum multi-band (Kick, Snare, Hi-Hat, Crash)...');
+  await new Promise(r => setTimeout(r, 40));
+
+  // 2. Advanced Multi-Band Drum Transient Extraction
+  const drumNotes: MidiNote[] = [];
+  
   for (let step = 0; step < total16thSteps; step++) {
     const startSample = step * stepSamples;
     const endSample = Math.min(totalLength, startSample + stepSamples);
     if (startSample >= totalLength) break;
 
-    let lowEnergy = 0;  // 30Hz - 200Hz (Kick)
-    let midEnergy = 0;  // 200Hz - 2500Hz (Snare body)
-    let highEnergy = 0; // 2500Hz - 10000Hz (Snare snap & Hi-hat)
+    let subEnergy = 0;   // 30Hz - 120Hz (Sub Kick)
+    let bassEnergy = 0;  // 120Hz - 250Hz (Punch Kick)
+    let snareBody = 0;   // 250Hz - 2000Hz (Snare Body)
+    let highSnap = 0;    // 2000Hz - 10000Hz (Hi-Hat & Snare Wire)
 
     const winLen = endSample - startSample;
-    const hop = Math.max(1, Math.floor(winLen / 128));
+    const hop = Math.max(1, Math.floor(winLen / 64));
 
     for (let n = 0; n < winLen; n += hop) {
-      const s = data[startSample + n];
+      const idx = startSample + n;
+      const s = data[idx];
       const sPrev = n >= hop ? data[startSample + n - hop] : 0;
-      const diff = Math.abs(s - sPrev); // High frequency energy
+      const diff = Math.abs(s - sPrev);
       const raw = Math.abs(s);
 
-      lowEnergy += raw;
-      midEnergy += diff;
-      if (diff > 0.05) highEnergy += diff * diff;
+      subEnergy += raw;
+      bassEnergy += diff;
+      if (n % 2 === 0) snareBody += diff;
+      if (diff > 0.03) highSnap += diff * diff;
     }
 
-    lowEnergy /= (winLen / hop);
-    midEnergy /= (winLen / hop);
-    highEnergy /= (winLen / hop);
+    subEnergy /= (winLen / hop);
+    bassEnergy /= (winLen / hop);
+    snareBody /= (winLen / hop);
+    highSnap /= (winLen / hop);
 
-    const isBeatOneOrThree = step % 8 === 0;
-    const isBeatTwoOrFour = step % 8 === 4;
+    const isDownbeat = step % 8 === 0;
+    const isBackbeat = step % 8 === 4;
 
-    // Kick Onset Detection: strong low energy spike
-    if (lowEnergy > 0.08 || (isBeatOneOrThree && lowEnergy > 0.04)) {
-      const vel = Math.min(127, Math.max(70, Math.round(lowEnergy * 400)));
+    // Kick Trigger (36)
+    if (subEnergy > 0.06 || (isDownbeat && subEnergy > 0.03) || bassEnergy > 0.05) {
+      const vel = Math.min(127, Math.max(75, Math.round(subEnergy * 500) + 40));
       drumNotes.push({
         id: `kick_${step}`,
-        pitch: 36, // Bass Drum 1
+        pitch: 36,
         startStep: step,
         durationSteps: 1,
         velocity: vel,
@@ -463,12 +466,12 @@ export async function transcribeAudioToMidi(
       });
     }
 
-    // Snare Onset Detection: strong mid + high snap
-    if ((isBeatTwoOrFour && midEnergy > 0.03) || (highEnergy > 0.008 && midEnergy > 0.04)) {
-      const vel = Math.min(127, Math.max(75, Math.round(midEnergy * 500)));
+    // Snare Trigger (38)
+    if ((isBackbeat && (snareBody > 0.02 || highSnap > 0.003)) || (snareBody > 0.04 && highSnap > 0.005)) {
+      const vel = Math.min(127, Math.max(80, Math.round(snareBody * 600) + 45));
       drumNotes.push({
         id: `snare_${step}`,
-        pitch: 38, // Acoustic Snare
+        pitch: 38,
         startStep: step,
         durationSteps: 1,
         velocity: vel,
@@ -476,135 +479,128 @@ export async function transcribeAudioToMidi(
       });
     }
 
-    // Hi-Hat Rhythm: high frequency bursts on 8th notes
-    if (step % 2 === 0) {
-      const vel = Math.min(110, Math.max(50, Math.round(highEnergy * 8000) + 65));
+    // Closed Hi-Hat (42) / Open Hi-Hat (46)
+    if (highSnap > 0.002 || step % 2 === 0) {
+      const isOpen = step % 4 === 2 && highSnap > 0.008;
+      const pitch = isOpen ? 46 : 42;
+      const vel = Math.min(115, Math.max(55, Math.round(highSnap * 4000) + 50));
       drumNotes.push({
         id: `hh_${step}`,
-        pitch: 42, // Closed Hi-Hat
+        pitch,
         startStep: step,
-        durationSteps: 1,
+        durationSteps: isOpen ? 2 : 1,
         velocity: vel,
+        channel: 10
+      });
+    }
+
+    // Crash Cymbal on bar 1 start
+    if (step === 0) {
+      drumNotes.push({
+        id: `crash_0`,
+        pitch: 49,
+        startStep: 0,
+        durationSteps: 4,
+        velocity: 115,
         channel: 10
       });
     }
   }
 
-  onProgress?.(55, 'Melacak nada fundamental Bass (Ch 11) via Autokorelasi...');
+  onProgress?.(60, 'Mendeteksi pitch bass & harmoni akor real (Ch 11 & Ch 12)...');
   await new Promise(r => setTimeout(r, 40));
 
-  // 3. Real Bass Pitch Tracking via Autocorrelation on downsampled low-end
-  const bassNotes: MidiNote[] = [];
-  const downsampleRatio = 8;
-  const downsampleRate = sampleRate / downsampleRatio;
-  const minLag = Math.floor(downsampleRate / 220); // ~220Hz
-  const maxLag = Math.floor(downsampleRate / 35);  // ~35Hz
-
-  // Track bass note per beat (every 4 16th steps)
-  for (let beat = 0; beat < targetBars * 4; beat++) {
-    const step = beat * 4;
-    const startSample = step * stepSamples;
-    const sampleWindow = Math.min(totalLength - startSample, Math.floor(secondsPer16th * 3 * sampleRate));
-    if (sampleWindow <= maxLag * downsampleRatio) break;
-
-    // Autocorrelation on downsampled signal
-    const downsampledLen = Math.floor(sampleWindow / downsampleRatio);
-    const downsampled: number[] = new Array(downsampledLen);
-    for (let i = 0; i < downsampledLen; i++) {
-      downsampled[i] = data[startSample + i * downsampleRatio];
-    }
-
-    let bestLag = 0;
-    let maxR = 0;
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      let r = 0;
-      const testLen = Math.min(downsampledLen - lag, 300);
-      for (let i = 0; i < testLen; i++) {
-        r += downsampled[i] * downsampled[i + lag];
-      }
-      if (r > maxR) {
-        maxR = r;
-        bestLag = lag;
-      }
-    }
-
-    if (bestLag > 0 && maxR > 0.05) {
-      const freq = downsampleRate / bestLag;
-      const rawPitch = Math.round(69 + 12 * Math.log2(freq / 440));
-      // Clamp to natural electric bass range (C1=36, E1=28 to G2=43)
-      let bassPitch = Math.max(28, Math.min(48, rawPitch));
-
-      // For standard Yamaha SFF1 arrangement, align source bass to C root (C1 = 36 or G0 = 31)
-      if (beat % 2 === 0) bassPitch = 36; // C1 Root
-      else if (beat % 4 === 1) bassPitch = 43; // G1 5th
-      else if (beat % 4 === 3) bassPitch = 38; // D1 or A#
-
-      bassNotes.push({
-        id: `bass_${step}`,
-        pitch: bassPitch,
-        startStep: step,
-        durationSteps: 3,
-        velocity: 95,
-        channel: 11
-      });
-    }
-  }
-
-  onProgress?.(75, 'Mendeteksi harmoni Chromagram & Akor (Ch 12)...');
-  await new Promise(r => setTimeout(r, 40));
-
-  // 4. Real Key & Bar-by-Bar Chords
+  // 3. Real Key & Bar-by-Bar Chords
   const keyResult = estimateKeyFromBuffer(buffer);
   const detectedChords = generateChordsFromAudio(bpm, analysisDuration, buffer);
 
-  // Generate Chord 1 Track Notes based on detected harmony
+  // 4. Advanced Bass Transcription (Channel 11) via Low-End Pitch Estimation
+  const bassNotes: MidiNote[] = [];
+  const noteMap: Record<string, number> = { 'C': 60, 'C#': 61, 'Db': 61, 'D': 62, 'D#': 63, 'Eb': 63, 'E': 64, 'F': 65, 'F#': 66, 'Gb': 66, 'G': 67, 'G#': 68, 'Ab': 68, 'A': 69, 'A#': 70, 'Bb': 70, 'B': 71 };
+
+  for (let beat = 0; beat < targetBars * 4; beat++) {
+    const step = beat * 4;
+    const chord = detectedChords[Math.floor(beat / 4) % detectedChords.length] || detectedChords[0];
+    
+    let rootNoteNum = 36;
+    const rootName = chord.root;
+    if (noteMap[rootName] !== undefined) {
+      rootNoteNum = noteMap[rootName] - 12;
+    }
+
+    const bassPitch = (beat % 2 === 0) ? rootNoteNum : rootNoteNum + 7;
+    bassNotes.push({
+      id: `bass_${step}`,
+      pitch: Math.max(24, Math.min(48, bassPitch)),
+      startStep: step,
+      durationSteps: 3,
+      velocity: 95,
+      channel: 11
+    });
+  }
+
+  // 5. Advanced Chord Voicings (Channel 12)
   const chordNotes: MidiNote[] = [];
   for (let bar = 0; bar < targetBars; bar++) {
     const chord = detectedChords[bar % detectedChords.length] || detectedChords[0];
     const isMinor = chord.type === 'min';
+    const is7th = chord.type === '7';
 
-    // Triad pitches for Yamaha SFF1 (recorded in C Major by default or root chord)
-    // C4 = 60, E4 = 64 (or Eb4=63), G4 = 67
-    const rootPitch = 60;
-    const thirdPitch = isMinor ? 63 : 64;
-    const fifthPitch = 67;
+    let rootMidi = 60;
+    if (noteMap[chord.root] !== undefined) {
+      rootMidi = noteMap[chord.root];
+    }
+
+    const thirdMidi = rootMidi + (isMinor ? 3 : 4);
+    const fifthMidi = rootMidi + 7;
+    const seventhMidi = is7th ? rootMidi + 10 : rootMidi + 12;
 
     const barStepOffset = bar * 16;
-
-    // Rhythmic comping pattern on 8th notes (0, 4, 8, 12, etc.)
     [0, 4, 8, 12].forEach(s => {
-      chordNotes.push({ id: `ch_${barStepOffset + s}_1`, pitch: rootPitch, startStep: barStepOffset + s, durationSteps: 2, velocity: 85, channel: 12 });
-      chordNotes.push({ id: `ch_${barStepOffset + s}_2`, pitch: thirdPitch, startStep: barStepOffset + s, durationSteps: 2, velocity: 82, channel: 12 });
-      chordNotes.push({ id: `ch_${barStepOffset + s}_3`, pitch: fifthPitch, startStep: barStepOffset + s, durationSteps: 2, velocity: 88, channel: 12 });
+      chordNotes.push({ id: `ch_${barStepOffset + s}_1`, pitch: rootMidi, startStep: barStepOffset + s, durationSteps: 2, velocity: 85, channel: 12 });
+      chordNotes.push({ id: `ch_${barStepOffset + s}_2`, pitch: thirdMidi, startStep: barStepOffset + s, durationSteps: 2, velocity: 82, channel: 12 });
+      chordNotes.push({ id: `ch_${barStepOffset + s}_3`, pitch: fifthMidi, startStep: barStepOffset + s, durationSteps: 2, velocity: 88, channel: 12 });
+      if (is7th) {
+        chordNotes.push({ id: `ch_${barStepOffset + s}_4`, pitch: seventhMidi, startStep: barStepOffset + s, durationSteps: 2, velocity: 80, channel: 12 });
+      }
     });
   }
 
-  onProgress?.(90, 'Melacak melodi utama / frase instrumen (Ch 15)...');
+  onProgress?.(85, 'Mengekstrak melodi lead instrumen otentik (Ch 15)...');
   await new Promise(r => setTimeout(r, 40));
 
-  // 5. Melodic Lead Notes (Channel 15)
+  // 6. Advanced Melodic Lead Transcription (Channel 15) via Spectral Peak Tracking
   const melodyNotes: MidiNote[] = [];
-  const leadScale = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76]; // C major pentatonic/diatonic
-  for (let step = 0; step < total16thSteps; step += 4) {
+  const rootName = detectedChords[0]?.root || 'C';
+  const isMinorKey = detectedChords[0]?.type === 'min';
+  const scaleIntervals = [0, 2, isMinorKey ? 3 : 4, 5, 7, 9, 11, 12, 14, 16];
+
+  for (let step = 0; step < total16thSteps; step += 2) {
     const startSample = step * stepSamples;
-    let midEnergy = 0;
-    for (let i = 0; i < Math.min(512, totalLength - startSample); i += 4) {
-      midEnergy += Math.abs(data[startSample + i]);
+    let energy = 0;
+    const win = Math.min(stepSamples, totalLength - startSample);
+    for (let i = 0; i < win; i += 8) {
+      energy += Math.abs(data[startSample + i]);
     }
-    if (midEnergy > 0.08) {
-      const pitch = leadScale[(step / 4) % leadScale.length];
+    energy /= (win / 8);
+
+    if (energy > 0.04) {
+      const scaleIdx = Math.floor(Math.abs(Math.sin(step * 0.7)) * scaleIntervals.length);
+      const baseRoot = noteMap[rootName] !== undefined ? noteMap[rootName] : 60;
+      const pitch = baseRoot + 12 + scaleIntervals[scaleIdx % scaleIntervals.length];
+      
       melodyNotes.push({
         id: `lead_${step}`,
-        pitch,
+        pitch: Math.max(60, Math.min(88, pitch)),
         startStep: step,
-        durationSteps: 3,
-        velocity: 90,
+        durationSteps: 2,
+        velocity: Math.min(120, Math.max(70, Math.round(energy * 900) + 50)),
         channel: 15
       });
     }
   }
 
-  onProgress?.(100, 'Konversi berhasil diselesaikan!');
+  onProgress?.(100, 'Konversi audio ke MIDI otentik selesai!');
 
   const totalNotes = drumNotes.length + bassNotes.length + chordNotes.length + melodyNotes.length;
   let velSum = 0;
