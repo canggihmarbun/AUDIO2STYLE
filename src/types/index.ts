@@ -6,6 +6,7 @@ export type NavTab =
   | 'style_creator'
   | 'compatibility'
   | 'export_manager'
+  | 'web_midi'
   | 'project_library'
   | 'settings';
 

@@ -14,6 +14,7 @@ import { MidiEditorView } from './components/midi/MidiEditorView';
 import { StyleCreatorView } from './components/style/StyleCreatorView';
 import { KeyboardCompatibilityView } from './components/compatibility/KeyboardCompatibilityView';
 import { ExportManagerView } from './components/export/ExportManagerView';
+import { WebMidiTransferView } from './components/export/WebMidiTransferView';
 import { ProjectLibraryView } from './components/library/ProjectLibraryView';
 import { SettingsView } from './components/settings/SettingsView';
 import { loadCurrentProject, saveCurrentProject } from './utils/projectStore';
@@ -194,6 +195,12 @@ export default function App() {
             <ExportManagerView
               project={project}
               onUpdateProject={handleUpdateProject}
+            />
+          )}
+
+          {activeTab === 'web_midi' && (
+            <WebMidiTransferView
+              project={project}
             />
           )}
 

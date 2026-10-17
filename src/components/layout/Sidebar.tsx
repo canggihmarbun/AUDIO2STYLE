@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, AudioWaveform, GitCommit, Piano, 
   Layers, Sliders, DownloadCloud, Library, Settings, 
-  Disc, CheckCircle2, Terminal
+  Disc, CheckCircle2, Terminal, Usb
 } from 'lucide-react';
 import { NavTab } from '../../types';
 
@@ -47,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     { id: 'compatibility', label: 'Kompatibilitas Keyboard', icon: Sliders },
     { id: 'export_manager', label: 'Export Manager', icon: DownloadCloud },
+    { id: 'web_midi', label: 'Load Style via MIDI', icon: Usb, badge: 'Live Cable', badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     { id: 'project_library', label: 'Project Library', icon: Library },
     { id: 'settings', label: 'Pengaturan & Windows', icon: Settings },
   ];
