@@ -1,0 +1,145 @@
+/**
+ * Standard MIDI File (SMF) Binary Encoder (Format 0 & Format 1)
+ */
+
+export interface RawMidiEvent {
+  tick: number; // absolute tick
+  type: 'noteOn' | 'noteOff' | 'marker' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange';
+  channel?: number; // 0-15 (0-indexed)
+  pitch?: number;
+  velocity?: number;
+  text?: string;
+  bpm?: number;
+  numerator?: number;
+  denominator?: number;
+  controller?: number;
+  value?: number;
+}
+
+export function writeVLQ(value: number): number[] {
+  const bytes: number[] = [];
+  let buffer = value & 0x7F;
+  while ((value >>= 7) > 0) {
+    buffer <<= 8;
+    buffer |= 0x80;
+    buffer += (value & 0x7F);
+  }
+  while (true) {
+    bytes.push(buffer & 0xFF);
+    if (buffer & 0x80) {
+      buffer >>= 8;
+    } else {
+      break;
+    }
+  }
+  return bytes;
+}
+
+export function encodeStringToBytes(str: string): number[] {
+  const bytes: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    bytes.push(str.charCodeAt(i) & 0xFF);
+  }
+  return bytes;
+}
+
+export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Array {
+  // Sort events by absolute tick
+  events.sort((a, b) => {
+    if (a.tick !== b.tick) return a.tick - b.tick;
+    // Put meta events before note events at same tick
+    const priority = (ev: RawMidiEvent) => {
+      if (ev.type === 'timeSig') return 0;
+      if (ev.type === 'tempo') return 1;
+      if (ev.type === 'marker') return 2;
+      if (ev.type === 'controlChange') return 3;
+      if (ev.type === 'programChange') return 4;
+      if (ev.type === 'noteOff') return 5;
+      return 6;
+    };
+    return priority(a) - priority(b);
+  });
+
+  const trackData: number[] = [];
+  let lastTick = 0;
+
+  for (const ev of events) {
+    const delta = Math.max(0, ev.tick - lastTick);
+    lastTick = ev.tick;
+    trackData.push(...writeVLQ(delta));
+
+    switch (ev.type) {
+      case 'tempo': {
+        const bpm = ev.bpm || 120;
+        const mpqn = Math.round(60000000 / bpm);
+        trackData.push(0xFF, 0x51, 0x03);
+        trackData.push((mpqn >> 16) & 0xFF);
+        trackData.push((mpqn >> 8) & 0xFF);
+        trackData.push(mpqn & 0xFF);
+        break;
+      }
+      case 'timeSig': {
+        const num = ev.numerator || 4;
+        const den = ev.denominator || 4;
+        const denPower = Math.round(Math.log2(den));
+        trackData.push(0xFF, 0x58, 0x04, num, denPower, 24, 8);
+        break;
+      }
+      case 'marker': {
+        const textBytes = encodeStringToBytes(ev.text || '');
+        trackData.push(0xFF, 0x06);
+        trackData.push(...writeVLQ(textBytes.length));
+        trackData.push(...textBytes);
+        break;
+      }
+      case 'controlChange': {
+        const ch = (ev.channel || 0) & 0x0F;
+        trackData.push(0xB0 | ch, (ev.controller || 0) & 0x7F, (ev.value || 0) & 0x7F);
+        break;
+      }
+      case 'programChange': {
+        const ch = (ev.channel || 0) & 0x0F;
+        trackData.push(0xC0 | ch, (ev.value || 0) & 0x7F);
+        break;
+      }
+      case 'noteOn': {
+        const ch = (ev.channel || 0) & 0x0F;
+        trackData.push(0x90 | ch, (ev.pitch || 60) & 0x7F, (ev.velocity || 64) & 0x7F);
+        break;
+      }
+      case 'noteOff': {
+        const ch = (ev.channel || 0) & 0x0F;
+        trackData.push(0x80 | ch, (ev.pitch || 60) & 0x7F, 0x00);
+        break;
+      }
+    }
+  }
+
+  // End of Track meta event (delta = 0)
+  trackData.push(...writeVLQ(0));
+  trackData.push(0xFF, 0x2F, 0x00);
+
+  // Construct SMF Format 0 file
+  const header = [
+    0x4D, 0x54, 0x68, 0x64, // 'MThd'
+    0x00, 0x00, 0x00, 0x06, // length 6
+    0x00, 0x00,             // format 0
+    0x00, 0x01,             // 1 track
+    (ppqn >> 8) & 0xFF, ppqn & 0xFF // PPQN
+  ];
+
+  const trackHeader = [
+    0x4D, 0x54, 0x72, 0x6B, // 'MTrk'
+    (trackData.length >> 24) & 0xFF,
+    (trackData.length >> 16) & 0xFF,
+    (trackData.length >> 8) & 0xFF,
+    trackData.length & 0xFF
+  ];
+
+  const result = new Uint8Array(header.length + trackHeader.length + trackData.length);
+  result.set(header, 0);
+  result.set(trackHeader, header.length);
+  result.set(trackData, header.length + trackHeader.length);
+
+  return result;
+}

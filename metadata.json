@@ -1,0 +1,6 @@
+{
+  "name": "Audio2Style Pro",
+  "description": "Software workstation untuk mengubah audio lagu MP3/WAV menjadi MIDI multi-track dan format style keyboard arranger Yamaha PSR-S750.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
