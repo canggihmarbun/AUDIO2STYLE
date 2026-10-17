@@ -11,6 +11,7 @@ import { downloadProjectFile } from '../../utils/projectStore';
 
 interface ExportManagerViewProps {
   project: ProjectData;
+  onUpdateProject?: (patch: Partial<ProjectData>) => void;
 }
 
 export const ExportManagerView: React.FC<ExportManagerViewProps> = ({ project }) => {

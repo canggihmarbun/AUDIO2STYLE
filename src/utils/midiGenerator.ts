@@ -4,7 +4,7 @@
 
 export interface RawMidiEvent {
   tick: number; // absolute tick
-  type: 'noteOn' | 'noteOff' | 'marker' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange';
+  type: 'noteOn' | 'noteOff' | 'marker' | 'trackName' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange' | 'pitchBend';
   channel?: number; // 0-15 (0-indexed)
   pitch?: number;
   velocity?: number;
@@ -47,15 +47,21 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
   // Sort events by absolute tick
   events.sort((a, b) => {
     if (a.tick !== b.tick) return a.tick - b.tick;
-    // Put meta events before note events at same tick
+    // Put meta events before note events at same tick with strict Yamaha SFF1 ordering
     const priority = (ev: RawMidiEvent) => {
       if (ev.type === 'timeSig') return 0;
       if (ev.type === 'tempo') return 1;
-      if (ev.type === 'marker') return 2;
-      if (ev.type === 'controlChange') return 3;
-      if (ev.type === 'programChange') return 4;
-      if (ev.type === 'noteOff') return 5;
-      return 6;
+      if (ev.type === 'trackName') return 2;
+      if (ev.type === 'marker') {
+        if (ev.text === 'SFF1') return 3;
+        if (ev.text === 'SInt') return 4;
+        return 5;
+      }
+      if (ev.type === 'controlChange') return 6;
+      if (ev.type === 'programChange') return 7;
+      if (ev.type === 'pitchBend') return 8;
+      if (ev.type === 'noteOff') return 9;
+      return 10;
     };
     return priority(a) - priority(b);
   });
@@ -85,6 +91,13 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
         trackData.push(0xFF, 0x58, 0x04, num, denPower, 24, 8);
         break;
       }
+      case 'trackName': {
+        const textBytes = encodeStringToBytes(ev.text || '');
+        trackData.push(0xFF, 0x03);
+        trackData.push(...writeVLQ(textBytes.length));
+        trackData.push(...textBytes);
+        break;
+      }
       case 'marker': {
         const textBytes = encodeStringToBytes(ev.text || '');
         trackData.push(0xFF, 0x06);
@@ -100,6 +113,12 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
       case 'programChange': {
         const ch = (ev.channel || 0) & 0x0F;
         trackData.push(0xC0 | ch, (ev.value || 0) & 0x7F);
+        break;
+      }
+      case 'pitchBend': {
+        const ch = (ev.channel || 0) & 0x0F;
+        const val = Math.max(0, Math.min(16383, ev.value ?? 8192));
+        trackData.push(0xE0 | ch, val & 0x7F, (val >> 7) & 0x7F);
         break;
       }
       case 'noteOn': {

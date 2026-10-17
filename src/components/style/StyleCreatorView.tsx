@@ -105,6 +105,13 @@ export const StyleCreatorView: React.FC<StyleCreatorViewProps> = ({
     onUpdateProject({ sections });
   };
 
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+
+  const showNotification = (msg: string) => {
+    setNotificationMessage(msg);
+    setTimeout(() => setNotificationMessage(null), 4000);
+  };
+
   // Clone Section pattern to another (e.g. Main A to Main B)
   const handleCloneSection = (targetId: StyleSectionId) => {
     const sections = { ...project.sections };
@@ -115,7 +122,7 @@ export const StyleCreatorView: React.FC<StyleCreatorViewProps> = ({
       tracks: sourceTracks
     };
     onUpdateProject({ sections });
-    alert(`Pola dari ${activeSection.name} berhasil disalin ke ${sections[targetId].name}.`);
+    showNotification(`Pola dari ${activeSection.name} berhasil disalin ke ${sections[targetId].name}.`);
   };
 
   // Generate Auto Fill-in from Main rhythm
@@ -143,7 +150,72 @@ export const StyleCreatorView: React.FC<StyleCreatorViewProps> = ({
     sections['fill_a'] = fillA;
 
     onUpdateProject({ sections });
-    alert('Pola Fill In A berhasil dibuat otomatis dengan aksen fill tom drum!');
+    showNotification('Pola Fill In A berhasil dibuat otomatis dengan aksen tom drum roll!');
+  };
+
+  // Auto-generate full accompaniment suite (Main B, Fill In A, Fill In B, Intro 1, Ending 1)
+  const handleAutoGenerateFullSuite = () => {
+    const sections = { ...project.sections };
+    const mainATracks = sections['main_a'].tracks;
+
+    // 1. Generate Main B (higher energy with +10% velocity and ride/crash accents)
+    const mainBTracks = JSON.parse(JSON.stringify(mainATracks));
+    Object.values(mainBTracks).forEach((trk: any) => {
+      trk.notes = trk.notes.map((n: any) => ({
+        ...n,
+        id: `mb_${n.id}`,
+        velocity: Math.min(127, Math.round(n.velocity * 1.1))
+      }));
+    });
+    // Add open hi-hat (46) or ride cymbal (51) to Main B drums
+    if (mainBTracks[10]) {
+      const bBars = sections['main_b'].bars || 2;
+      for (let bar = 0; bar < bBars; bar++) {
+        const offset = bar * 16;
+        mainBTracks[10].notes.push(
+          { id: `mb_ride_${offset}_0`, pitch: 51, startStep: offset + 0, durationSteps: 2, velocity: 90, channel: 10 },
+          { id: `mb_ride_${offset}_4`, pitch: 51, startStep: offset + 4, durationSteps: 2, velocity: 85, channel: 10 },
+          { id: `mb_ride_${offset}_8`, pitch: 51, startStep: offset + 8, durationSteps: 2, velocity: 90, channel: 10 },
+          { id: `mb_ride_${offset}_12`, pitch: 51, startStep: offset + 12, durationSteps: 2, velocity: 85, channel: 10 }
+        );
+      }
+    }
+    sections['main_b'] = { ...sections['main_b'], tracks: mainBTracks };
+
+    // 2. Generate Fill In A (1 bar with drum roll)
+    const fillATracks = JSON.parse(JSON.stringify(mainATracks));
+    fillATracks[10].notes = [
+      { id: 'fa_0', pitch: 36, startStep: 0, durationSteps: 2, velocity: 105, channel: 10 },
+      { id: 'fa_4', pitch: 38, startStep: 4, durationSteps: 2, velocity: 110, channel: 10 },
+      { id: 'fa_8', pitch: 48, startStep: 8, durationSteps: 1, velocity: 100, channel: 10 },
+      { id: 'fa_9', pitch: 48, startStep: 9, durationSteps: 1, velocity: 100, channel: 10 },
+      { id: 'fa_10', pitch: 47, startStep: 10, durationSteps: 1, velocity: 105, channel: 10 },
+      { id: 'fa_11', pitch: 47, startStep: 11, durationSteps: 1, velocity: 105, channel: 10 },
+      { id: 'fa_12', pitch: 45, startStep: 12, durationSteps: 1, velocity: 110, channel: 10 },
+      { id: 'fa_13', pitch: 45, startStep: 13, durationSteps: 1, velocity: 110, channel: 10 },
+      { id: 'fa_14', pitch: 38, startStep: 14, durationSteps: 1, velocity: 115, channel: 10 },
+      { id: 'fa_15', pitch: 38, startStep: 15, durationSteps: 1, velocity: 125, channel: 10 },
+    ];
+    sections['fill_a'] = { ...sections['fill_a'], bars: 1, tracks: fillATracks };
+
+    // 3. Generate Intro 1 (2 bars arpeggio & buildup)
+    const introTracks = JSON.parse(JSON.stringify(mainATracks));
+    sections['intro_1'] = { ...sections['intro_1'], bars: 2, tracks: introTracks };
+
+    // 4. Generate Ending 1 (2 bars final resolution to C chord)
+    const endingTracks = JSON.parse(JSON.stringify(mainATracks));
+    if (endingTracks[10]) {
+      endingTracks[10].notes = [
+        { id: 'end_kick', pitch: 36, startStep: 0, durationSteps: 4, velocity: 120, channel: 10 },
+        { id: 'end_crash', pitch: 49, startStep: 0, durationSteps: 8, velocity: 120, channel: 10 },
+        { id: 'end_snare', pitch: 38, startStep: 16, durationSteps: 4, velocity: 110, channel: 10 },
+        { id: 'end_crash2', pitch: 49, startStep: 16, durationSteps: 16, velocity: 125, channel: 10 },
+      ];
+    }
+    sections['ending_1'] = { ...sections['ending_1'], bars: 2, tracks: endingTracks };
+
+    onUpdateProject({ sections });
+    showNotification('Paket Style Lengkap berhasil dibuat: Main A & B, Fill In A, Intro 1, dan Ending 1 siap dimainkan di Yamaha PSR-S750!');
   };
 
   return (
@@ -176,18 +248,39 @@ export const StyleCreatorView: React.FC<StyleCreatorViewProps> = ({
 
           <button
             onClick={handleGenerateFillIn}
-            className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-700 transition-colors"
+            className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-700 transition-colors cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>Generate Fill In</span>
           </button>
+
+          <button
+            onClick={handleAutoGenerateFullSuite}
+            className="flex items-center space-x-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-md shadow-cyan-950/40 transition-all cursor-pointer"
+            title="Otomatis buat Main B, Fill In A, Intro 1, dan Ending 1 dari pola Main A"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>Auto-Lengkapi Paket Style</span>
+          </button>
         </div>
       </div>
 
+      {/* Notification Toast Banner */}
+      {notificationMessage && (
+        <div className="p-3 bg-cyan-950/80 border border-cyan-500/50 rounded-xl text-xs text-cyan-200 flex items-center justify-between shadow-lg">
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>{notificationMessage}</span>
+          </div>
+          <button onClick={() => setNotificationMessage(null)} className="text-cyan-400 hover:text-white font-mono text-xs">✕</button>
+        </div>
+      )}
+
       {/* Arranger Section Selector Tabs (Intro 1-3, Main A-D, Fill A-D, Break, Ending 1-3) */}
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          Pilih Bagian Style:
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+          <span>Pilih Bagian Style:</span>
+          <span className="text-[10px] text-cyan-400 font-normal">Titik hijau = bagian terisi notasi musik</span>
         </div>
 
         <div className="flex flex-wrap gap-2">

@@ -193,6 +193,7 @@ export default function App() {
           {activeTab === 'export_manager' && (
             <ExportManagerView
               project={project}
+              onUpdateProject={handleUpdateProject}
             />
           )}
 
