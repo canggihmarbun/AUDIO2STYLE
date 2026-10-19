@@ -216,9 +216,28 @@ export function generateStandardMidiFile(project: ProjectData): Uint8Array {
 
   const events: RawMidiEvent[] = [];
 
+  events.push({
+    tick: 0,
+    type: 'sysEx',
+    data: [0x7E, 0x7F, 0x09, 0x01, 0xF7]
+  });
+
   events.push({ tick: 0, type: 'timeSig', numerator: 4, denominator: 4 });
   events.push({ tick: 0, type: 'tempo', bpm: project.tempo || 120 });
-  events.push({ tick: 0, type: 'trackName', text: project.title || 'Audio2Style' });
+  events.push({ tick: 0, type: 'trackName', text: project.title || 'Audio2Style Professional Song' });
+
+  const gmChannels = [
+    { ch: 0, pc: 0, vol: 110, pan: 64 },
+    { ch: 1, pc: 48, vol: 95, pan: 40 },
+    { ch: 2, pc: 33, vol: 115, pan: 64 },
+    { ch: 9, pc: 0, vol: 120, pan: 64 }
+  ];
+
+  gmChannels.forEach(c => {
+    events.push({ tick: 0, type: 'controlChange', channel: c.ch, controller: 7, value: c.vol });
+    events.push({ tick: 0, type: 'controlChange', channel: c.ch, controller: 10, value: c.pan });
+    events.push({ tick: 0, type: 'programChange', channel: c.ch, value: c.pc });
+  });
 
   let currentTick = 0;
 
@@ -236,16 +255,22 @@ export function generateStandardMidiFile(project: ProjectData): Uint8Array {
 
     Object.values(section.tracks).forEach(trk => {
       const ch = trk.channel - 1;
-      events.push({ tick: currentTick, type: 'programChange', channel: ch, value: trk.programChange });
+      let targetCh = ch;
+      if (ch === 9 || ch === 10) targetCh = 9;
+      else if (ch === 11) targetCh = 2;
+      else if (ch === 12 || ch === 13) targetCh = 1;
+      else if (ch >= 14) targetCh = 0;
+
+      events.push({ tick: currentTick, type: 'programChange', channel: targetCh, value: trk.programChange });
 
       if (trk.notes && trk.notes.length > 0) {
         trk.notes.forEach(note => {
           const noteStartTick = currentTick + (note.startStep * ticksPer16th);
-          const noteDurationTicks = Math.max(ticksPer16th / 2, note.durationSteps * ticksPer16th);
+          const noteDurationTicks = Math.max(ticksPer16th, note.durationSteps * ticksPer16th);
           const clampedEndTick = Math.min(noteStartTick + noteDurationTicks, currentTick + sectionTotalTicks);
 
-          events.push({ tick: noteStartTick, type: 'noteOn', channel: ch, pitch: note.pitch, velocity: note.velocity });
-          events.push({ tick: clampedEndTick, type: 'noteOff', channel: ch, pitch: note.pitch, velocity: 0 });
+          events.push({ tick: noteStartTick, type: 'noteOn', channel: targetCh, pitch: note.pitch, velocity: Math.max(50, Math.min(120, note.velocity)) });
+          events.push({ tick: clampedEndTick, type: 'noteOff', channel: targetCh, pitch: note.pitch, velocity: 0 });
         });
       }
     });
