@@ -420,6 +420,40 @@ export const AudioConverterView: React.FC<AudioConverterViewProps> = ({
         </div>
       </div>
 
+      {/* Spleeter CLI Integration Panel */}
+      <div className="bg-slate-900/90 border border-blue-500/30 rounded-xl p-4 space-y-3 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+              <Terminal className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-white">Spleeter Stem Separation CLI Integration</h3>
+              <p className="text-[11px] text-slate-400">Pemisah vokal & iringan (accompaniment) berbasis Python Spleeter 2Stems untuk KAMI_PERLU_KAU-4.WAV.mp3</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText("spleeter separate -p spleeter:2stems -o output KAMI_PERLU_KAU-4.WAV.mp3");
+              alert("Perintah Spleeter berhasil disalin ke clipboard!");
+            }}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center space-x-1.5 cursor-pointer w-fit"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Salin Perintah Spleeter</span>
+          </button>
+        </div>
+
+        <div className="bg-slate-950 rounded-lg p-3 font-mono text-xs border border-slate-800 text-cyan-300 flex items-center justify-between">
+          <span className="truncate">spleeter separate -p spleeter:2stems -o output KAMI_PERLU_KAU-4.WAV.mp3</span>
+          <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-slate-400 shrink-0 ml-2">CLI Ready</span>
+        </div>
+
+        <div className="text-[11px] text-slate-400 leading-relaxed">
+          <strong className="text-slate-200">Cara Kerja:</strong> Spleeter akan membagi file <code className="text-cyan-300">KAMI_PERLU_KAU-4.WAV.mp3</code> menjadi dua file stem terpisah di folder <code className="text-cyan-300">output/KAMI_PERLU_KAU-4.WAV/</code>: <code className="text-emerald-300">accompaniment.wav</code> (Bass, Drum, Musik) dan <code className="text-pink-300">vocals.wav</code> (Melodi/Vokal). Hasil pemisahan ini langsung siap diimpor untuk menghasilkan MIDI berkualitas tinggi di aplikasi ini.
+        </div>
+      </div>
+
       {/* Error Message Alert */}
       {errorMessage && (
         <div className="bg-red-950/60 border border-red-500/50 rounded-xl p-4 flex items-start space-x-3 text-xs text-red-200 shadow-lg">
