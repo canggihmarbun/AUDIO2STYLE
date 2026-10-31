@@ -8,6 +8,7 @@ import { ProjectData, NavTab } from './types';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
+import { AiStemSeparatorView } from './components/audio/AiStemSeparatorView';
 import { AudioConverterView } from './components/audio/AudioConverterView';
 import { ChordAnalyzerView } from './components/chords/ChordAnalyzerView';
 import { MidiEditorView } from './components/midi/MidiEditorView';
@@ -147,6 +148,14 @@ export default function App() {
               onNavigate={(tab) => setActiveTab(tab)}
               hasAudioLoaded={!!project.sourceAudio}
               totalNotes={totalNotes}
+            />
+          )}
+
+          {activeTab === 'stem_separator' && (
+            <AiStemSeparatorView
+              project={project}
+              onUpdateProject={handleUpdateProject}
+              onNavigate={(tab) => setActiveTab(tab)}
             />
           )}
 

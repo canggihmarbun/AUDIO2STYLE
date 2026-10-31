@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, AudioWaveform, GitCommit, Piano, 
   Layers, Sliders, DownloadCloud, Library, Settings, 
-  Disc, CheckCircle2, Terminal, Usb
+  Disc, CheckCircle2, Terminal, Usb, Split
 } from 'lucide-react';
 import { NavTab } from '../../types';
 
@@ -23,6 +23,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const menuItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string; badgeColor?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { 
+      id: 'stem_separator', 
+      label: 'AI Stem Separator', 
+      icon: Split, 
+      badge: 'Demucs 4-Stem',
+      badgeColor: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+    },
     { 
       id: 'audio_converter', 
       label: 'Audio Converter', 

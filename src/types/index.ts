@@ -1,5 +1,6 @@
 export type NavTab = 
   | 'dashboard'
+  | 'stem_separator'
   | 'audio_converter'
   | 'chord_analyzer'
   | 'midi_editor'
@@ -24,6 +25,27 @@ export interface AudioMetadata {
 }
 
 export type StemType = 'drum' | 'bass' | 'chord' | 'melody';
+export type DemucsStemType = 'drum' | 'bass' | 'vocal' | 'other';
+
+export interface DemucsStemItem {
+  id: DemucsStemType;
+  name: string;
+  subtitle: string;
+  color: string;
+  icon: string;
+  volume: number; // 0 to 1
+  muted: boolean;
+  solo: boolean;
+  pan: number; // -1 to 1
+  audioBuffer: AudioBuffer | null;
+  audioBlob: Blob | null;
+  audioUrl: string | null;
+  peaks: number[];
+  notes: MidiNote[];
+  isMidiConverting: boolean;
+  yamahaChannels: number[];
+  yamahaPartNames: string[];
+}
 
 export interface StemTrack {
   id: StemType;

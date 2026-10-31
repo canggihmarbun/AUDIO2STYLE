@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   AudioWaveform, Piano, Layers, DownloadCloud, Sparkles, 
   CheckCircle2, ArrowRight, Play, Disc, Sliders, ShieldCheck, 
-  FileMusic, Activity, HelpCircle, HardDrive
+  FileMusic, Activity, HelpCircle, HardDrive, Split
 } from 'lucide-react';
 import { ProjectData, NavTab } from '../../types';
 
@@ -89,11 +89,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex flex-wrap gap-3 pt-2">
             <button
+              onClick={() => onNavigate('stem_separator')}
+              className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg shadow-indigo-900/30 transition-all hover:scale-[1.02]"
+            >
+              <Split className="w-4 h-4" />
+              <span>AI Stem Separator (Demucs)</span>
+            </button>
+
+            <button
               onClick={() => onNavigate('audio_converter')}
               className="flex items-center space-x-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg shadow-cyan-900/30 transition-all hover:scale-[1.02]"
             >
               <AudioWaveform className="w-4 h-4" />
-              <span>Mulai Konversi Audio Baru</span>
+              <span>Audio Converter & DSP</span>
             </button>
 
             <button

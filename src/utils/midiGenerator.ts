@@ -2,6 +2,8 @@
  * Standard MIDI File (SMF) Binary Encoder (Format 0 & Format 1)
  */
 
+import { MidiNote } from '../types';
+
 export interface RawMidiEvent {
   tick: number; // absolute tick
   type: 'noteOn' | 'noteOff' | 'marker' | 'trackName' | 'tempo' | 'timeSig' | 'programChange' | 'controlChange' | 'pitchBend' | 'sysEx';
@@ -171,3 +173,61 @@ export function buildSMF0(events: RawMidiEvent[], ppqn: number = 480): Uint8Arra
 
   return result;
 }
+
+/**
+ * Build standard SMF Format 0 file for a single instrument or stem track
+ */
+export function buildMidiFromTrackNotes(
+  notes: MidiNote[],
+  tempo: number = 120,
+  trackName: string = 'Stem Track',
+  channel: number = 0,
+  programChange: number = 0
+): Uint8Array {
+  const ppqn = 480;
+  const ticksPer16th = ppqn / 4;
+  const events: RawMidiEvent[] = [];
+
+  // General MIDI System On
+  events.push({
+    tick: 0,
+    type: 'sysEx',
+    data: [0x7E, 0x7F, 0x09, 0x01, 0xF7]
+  });
+
+  events.push({ tick: 0, type: 'timeSig', numerator: 4, denominator: 4 });
+  events.push({ tick: 0, type: 'tempo', bpm: Math.max(40, Math.min(260, tempo)) });
+  events.push({ tick: 0, type: 'trackName', text: trackName });
+  events.push({ tick: 0, type: 'programChange', channel, value: programChange });
+
+  // CC7 Volume and CC10 Pan
+  events.push({ tick: 0, type: 'controlChange', channel, controller: 7, value: 100 });
+  events.push({ tick: 0, type: 'controlChange', channel, controller: 10, value: 64 });
+
+  if (notes && notes.length > 0) {
+    notes.forEach(note => {
+      const startTick = Math.max(0, note.startStep * ticksPer16th);
+      const durTicks = Math.max(ticksPer16th / 2, note.durationSteps * ticksPer16th);
+      const endTick = startTick + durTicks;
+
+      events.push({
+        tick: startTick,
+        type: 'noteOn',
+        channel,
+        pitch: Math.max(0, Math.min(127, note.pitch)),
+        velocity: Math.max(1, Math.min(127, note.velocity))
+      });
+
+      events.push({
+        tick: endTick,
+        type: 'noteOff',
+        channel,
+        pitch: Math.max(0, Math.min(127, note.pitch)),
+        velocity: 0
+      });
+    });
+  }
+
+  return buildSMF0(events, ppqn);
+}
+

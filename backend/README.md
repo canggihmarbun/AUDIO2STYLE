@@ -1,40 +1,46 @@
-# Audio2Style Pro - Python Backend (Spotify Basic Pitch)
+# Audio2Style Pro - Python Backend (Demucs 4-Stem & Spotify Basic Pitch)
 
-Backend Python FastAPI ini dirancang khusus untuk menangani transkripsi audio polifonik presisi tinggi menggunakan model **Spotify Basic Pitch**, menghasilkan file MIDI profesional yang mendekati melodi lagu asli untuk konversi ke Yamaha Style (PSR-S750).
+Backend Python FastAPI ini dirancang khusus untuk menangani:
+1. **AI Audio Stem Separator (Meta Demucs 4-Stem `htdemucs`)**: Memisahkan audio MP3/WAV menjadi 4 track terisolasi: **Drums**, **Bass**, **Vocals**, dan **Other**.
+2. **Polyphonic Audio-to-MIDI Transcription (Spotify Basic Pitch)**: Menghasilkan notasi MIDI presisi tinggi per stem untuk dipetakan ke 8 part Yamaha Style Arranger (PSR-S750).
 
 ---
 
 ## **Cara Pemasangan & Menjalankan di Windows:**
 
 ### **1. Prasyarat Sistem**
-* Pastikan **Python 3.9 atau 3.10** terinstal di Windows Anda (disarankan versi 64-bit).
-* Pastikan `pip` sudah diperbarui.
+* Disarankan menggunakan **Python 3.9 atau 3.10** (64-bit).
+* Koneksi internet untuk unduhan awal model Demucs (~80MB).
 
 ### **2. Langkah Instalasi**
-Buka Command Prompt (CMD) atau PowerShell di folder `/backend`, lalu jalankan perintah berikut:
+Buka Command Prompt (CMD) atau PowerShell di folder `/backend`:
 
 ```bash
-# 1. Buat virtual environment (opsional tapi disarankan)
+# 1. Buat virtual environment (disarankan)
 python -m venv venv
 venv\Scripts\activate
 
-# 2. Upgrade pip & setuptools
+# 2. Upgrade pip
 python -m pip install --upgrade pip
 
-# 3. Instal dependensi dari requirements.txt
+# 3. Instal dependensi Demucs, PyTorch, dan Basic Pitch
 pip install -r requirements.txt
 ```
 
-*(Catatan: Jika instalasi TensorFlow / Basic Pitch mengalami kendala pada Windows, pastikan Anda menggunakan Python 3.10).*
+*(Tips: Jika Anda memiliki kartu grafis NVIDIA, instal PyTorch CUDA untuk pemisahan stem secepat kilat: `pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118`).*
 
 ### **3. Menjalankan Server FastAPI**
 Jalankan perintah berikut di terminal:
 ```bash
 uvicorn main:app --reload --port 8000
 ```
-Server akan berjalan secara lokal di: `http://127.0.0.1:8000`
+Server akan aktif di: `http://127.0.0.1:8000`
 
-### **4. Integrasi dengan Aplikasi Web Audio2Style Pro**
-* Buka menu **Audio Converter** di aplikasi web Audio2Style Pro.
-* Pilih opsi **Python FastAPI Bridge (Lokal :8000)**.
-* Unggah file MP3 atau WAV Anda, lalu klik konversi. Aplikasi akan otomatis mengirimkan file audio ke backend Python dan menerima hasil MIDI berbasis Basic Pitch yang sangat akurat!
+### **4. Endpoint yang Tersedia**
+* `GET /health` : Mengecek kesiapan server, Demucs, dan Basic Pitch.
+* `POST /separate-stems` : Memisahkan file MP3/WAV menjadi 4 stem (drum, bass, vocal, other).
+* `POST /convert-stem-to-midi` : Mengonversi satu stem terisolasi ke file MIDI (.mid).
+* `POST /convert-audio-to-midi` : Mengonversi audio penuh ke MIDI.
+
+### **5. Integrasi dengan Audio2Style Pro**
+Di aplikasi web Audio2Style Pro, buka menu **AI Stem Separator** atau **Audio Converter**, pilih opsi **Demucs AI Backend Python (:8000)**, dan nikmati pemisahan stem tingkat studio!
